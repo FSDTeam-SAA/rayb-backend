@@ -1,0 +1,57 @@
+const express = require("express");
+const auth = require("../../middleware/auth");
+const USER_ROLE = require("../user/user.constant");
+const {
+  getNotifications,
+  markAsRead,
+  deleteNotification,
+  makeIgnore,
+  getAllNotifications,
+  markAsAllRead,
+  markAsAllReadForAdmin,
+} = require("./notification.controller");
+
+const router = express.Router();
+
+router.get(
+  "/",
+  auth(USER_ROLE.admin, USER_ROLE.businessMan, USER_ROLE.user),
+  getNotifications,
+);
+router.get(
+  "/all",
+  auth(USER_ROLE.admin, USER_ROLE.businessMan, USER_ROLE.user),
+  getAllNotifications,
+);
+
+router.put(
+  "/read/:id",
+  auth(USER_ROLE.admin, USER_ROLE.businessMan, USER_ROLE.user),
+  markAsRead,
+);
+router.put(
+  "/ignore/:id",
+  auth(USER_ROLE.admin, USER_ROLE.businessMan, USER_ROLE.user),
+  makeIgnore,
+);
+
+router.put(
+  "/all-read",
+  auth(USER_ROLE.admin, USER_ROLE.businessMan, USER_ROLE.user),
+  markAsAllRead,
+);
+
+router.put(
+  "/all-read-admin",
+  auth(USER_ROLE.admin, USER_ROLE.businessMan, USER_ROLE.user),
+  markAsAllReadForAdmin,
+);
+
+router.delete(
+  "/:id",
+  auth(USER_ROLE.admin, USER_ROLE.businessMan, USER_ROLE.user),
+  deleteNotification,
+);
+
+const notificationRouter = router;
+module.exports = notificationRouter;
