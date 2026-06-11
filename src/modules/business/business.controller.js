@@ -192,6 +192,225 @@ exports.createBusiness = async (req, res) => {
   }
 };
 
+// exports.getAllBusinesses = async (req, res) => {
+//   try {
+//     const {
+//       search,
+//       searchLocation,
+//       instrumentFamily,
+//       selectedInstrumentsGroup,
+//       newInstrumentName,
+//       minPrice,
+//       maxPrice,
+//       buyInstruments,
+//       sellInstruments,
+//       offerMusicLessons,
+//       tradeInstruments,
+//       rentInstruments,
+//       isMusicLessons,
+//       sort,
+//       openNow,
+//       postalCode,
+//       page = 1,
+//       limit = 40,
+//     } = req.query;
+
+//     const pageNumber = parseInt(page);
+//     const limitNumber = parseInt(limit);
+//     const skip = (pageNumber - 1) * limitNumber;
+
+//     let query = { status: 'approved', $and: [] };
+
+//     const toRegexArray = (value) => {
+//       const arr = Array.isArray(value) ? value : [value];
+//       return arr.map((v) => new RegExp(v.toString().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'));
+//     };
+
+//     /* ---------------- SEARCH FILTERS ---------------- */
+//     if (search) {
+//       const regexArr = toRegexArray(search);
+//       query.$and.push({
+//         $or: regexArr.flatMap((regex) => [
+//           { 'businessInfo.name': regex },
+//           // { "businessInfo.address": regex },
+//           { 'services.newInstrumentName': regex },
+//           { 'musicLessons.newInstrumentName': regex },
+//           { 'services.instrumentFamily': regex },
+//         ]),
+//       });
+//     }
+
+//     if (searchLocation) {
+//       const arr = Array.isArray(searchLocation) ? searchLocation : [searchLocation];
+
+//       const locationConditions = arr.map((loc) => {
+//         const escaped = loc.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+//         // Match the location:
+//         // - Anywhere after a comma+space (handles street prefix before it)
+//         // - OR at the very start of the string
+//         // - Followed optionally by a zip code
+//         // - Followed by comma or end of string
+//         const exactPattern = `(?:^|,\\s*)\\s*${escaped}(\\s+\\d{5}(-\\d{4})?)?\\s*(?:,|$)`;
+
+//         return {
+//           'businessInfo.address': new RegExp(exactPattern, 'i'),
+//         };
+//       });
+
+//       query.$and.push({ $or: locationConditions });
+//     }
+
+//     if (postalCode) {
+//       const regexArr = toRegexArray(postalCode);
+//       query.$and.push({
+//         $or: regexArr.map((regex) => ({
+//           'businessInfo.address': regex,
+//         })),
+//       });
+//     }
+
+//     if (instrumentFamily) {
+//       const regexArr = toRegexArray(instrumentFamily);
+//       query.$and.push({
+//         $or: regexArr.map((regex) => ({
+//           'services.instrumentFamily': regex,
+//         })),
+//       });
+//     }
+
+//     if (selectedInstrumentsGroup) {
+//       const regexArr = toRegexArray(selectedInstrumentsGroup);
+//       query.$and.push({
+//         $or: regexArr.flatMap((regex) => [
+//           { 'services.selectedInstrumentsGroup': regex },
+//           { 'musicLessons.selectedInstrumentsGroupMusic': regex },
+//         ]),
+//       });
+//     }
+
+//     if (newInstrumentName) {
+//       const regexArr = toRegexArray(newInstrumentName);
+//       query.$and.push({
+//         $or: regexArr.flatMap((regex) => [
+//           { 'services.newInstrumentName': regex },
+//           { 'musicLessons.newInstrumentName': regex },
+//         ]),
+//       });
+//     }
+
+//     /* ---------------- FLAGS ---------------- */
+
+//     if (buyInstruments === 'true') query.buyInstruments = true;
+//     if (sellInstruments === 'true') query.sellInstruments = true;
+//     if (offerMusicLessons === 'true') query.offerMusicLessons = true;
+//     if (tradeInstruments === 'true') query.tradeInstruments = true;
+//     if (rentInstruments === 'true') query.rentInstruments = true;
+//     if (isMusicLessons === 'true') query.isMusicLessons = true;
+
+//     if (query.$and.length === 0) delete query.$and;
+
+//     /* ---------------- FETCH FROM DB ---------------- */
+//     const totalCount = await Business.countDocuments(query);
+
+//     let businesses = await Business.find(query)
+//       .populate({
+//         path: 'review',
+//         options: { sort: { createdAt: -1 } },
+//       })
+//       .skip(skip)
+//       .limit(limitNumber)
+//       .lean();
+
+//     /* ---------------- PRICE FILTER (JS SIDE) ---------------- */
+
+//     const hasMin = minPrice !== undefined && minPrice !== '';
+//     const hasMax = maxPrice !== undefined && maxPrice !== '';
+
+//     if (hasMin || hasMax) {
+//       const min = hasMin ? Number(minPrice) : 0;
+//       const max = hasMax ? Number(maxPrice) : Number.MAX_SAFE_INTEGER;
+
+//       businesses = businesses.filter((b) => {
+//         const items = [...(b.services || []), ...(b.musicLessons || [])];
+
+//         return items.some((item) => {
+//           // RANGE pricing
+//           if (item.pricingType === 'range') {
+//             const itemMin = Number(item.minPrice);
+//             const itemMax = Number(item.maxPrice);
+//             if (isNaN(itemMin) || isNaN(itemMax)) return false;
+
+//             // STRICT minPrice logic
+//             const minPass = itemMin >= min;
+//             const maxPass = itemMax <= max;
+//             if (hasMin && hasMax) return minPass && maxPass;
+//             if (hasMin) return minPass;
+//             if (hasMax) return itemMax <= max;
+//           }
+
+//           // EXACT pricing
+//           const price = Number(item.price);
+//           if (isNaN(price)) return false;
+
+//           if (hasMin && hasMax) return price >= min && price <= max;
+//           if (hasMin) return price >= min;
+//           if (hasMax) return price <= max;
+//         });
+//       });
+//     }
+
+//     /* ---------------- OPEN NOW ---------------- */
+
+//     if (openNow === 'true') {
+//       const now = new Date();
+//       const day = now.toLocaleString('en-us', { weekday: 'long' }).toLowerCase();
+//       const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+//       businesses = businesses.filter((b) => {
+//         const today = b.businessHours?.find((h) => h.day.toLowerCase() === day && h.enabled);
+//         if (!today) return false;
+
+//         const start =
+//           parseInt(today.startTime.split(':')[0]) * 60 + parseInt(today.startTime.split(':')[1]);
+//         const end =
+//           parseInt(today.endTime.split(':')[0]) * 60 + parseInt(today.endTime.split(':')[1]);
+
+//         return currentMinutes >= start && currentMinutes <= end;
+//       });
+//     }
+
+//     /* ---------------- SORT ---------------- */
+
+//     if (sort) {
+//       const getMinPrice = (b) => {
+//         const prices = [...(b.services || []), ...(b.musicLessons || [])]
+//           .map((x) => (x.pricingType === 'range' ? Number(x.minPrice) : Number(x.price)))
+//           .filter((n) => !isNaN(n));
+
+//         return prices.length ? Math.min(...prices) : Infinity;
+//       };
+
+//       businesses.sort((a, b) =>
+//         sort === 'high-to-low' ? getMinPrice(b) - getMinPrice(a) : getMinPrice(a) - getMinPrice(b),
+//       );
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       data: businesses,
+//       pagination: {
+//         total: totalCount,
+//         page: pageNumber,
+//         limit: limitNumber,
+//         totalPages: Math.ceil(totalCount / limitNumber),
+//       },
+//     });
+//   } catch (error) {
+//     return res.status(500).json({ success: false, error: error.message });
+//   }
+// };
+
 exports.getAllBusinesses = async (req, res) => {
   try {
     const {
@@ -227,12 +446,12 @@ exports.getAllBusinesses = async (req, res) => {
     };
 
     /* ---------------- SEARCH FILTERS ---------------- */
+
     if (search) {
       const regexArr = toRegexArray(search);
       query.$and.push({
         $or: regexArr.flatMap((regex) => [
           { 'businessInfo.name': regex },
-          // { "businessInfo.address": regex },
           { 'services.newInstrumentName': regex },
           { 'musicLessons.newInstrumentName': regex },
           { 'services.instrumentFamily': regex },
@@ -246,11 +465,6 @@ exports.getAllBusinesses = async (req, res) => {
       const locationConditions = arr.map((loc) => {
         const escaped = loc.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-        // Match the location:
-        // - Anywhere after a comma+space (handles street prefix before it)
-        // - OR at the very start of the string
-        // - Followed optionally by a zip code
-        // - Followed by comma or end of string
         const exactPattern = `(?:^|,\\s*)\\s*${escaped}(\\s+\\d{5}(-\\d{4})?)?\\s*(?:,|$)`;
 
         return {
@@ -311,6 +525,7 @@ exports.getAllBusinesses = async (req, res) => {
     if (query.$and.length === 0) delete query.$and;
 
     /* ---------------- FETCH FROM DB ---------------- */
+
     const totalCount = await Business.countDocuments(query);
 
     let businesses = await Business.find(query)
@@ -322,7 +537,28 @@ exports.getAllBusinesses = async (req, res) => {
       .limit(limitNumber)
       .lean();
 
-    /* ---------------- PRICE FILTER (JS SIDE) ---------------- */
+    /* ---------------- REVIEW LOGIC ---------------- */
+
+    businesses = businesses.map((business) => {
+      const allReviews = business.review || [];
+
+      // Customer reviews (Google review না)
+      const customerReviews = allReviews.filter(
+        (review) => !review.googleAuthorName && review.status === 'approved',
+      );
+
+      // Google reviews
+      const googleReviews = allReviews.filter((review) => review.googleAuthorName);
+
+      return {
+        ...business,
+
+        review:
+          customerReviews.length >= 3 ? customerReviews : [...customerReviews, ...googleReviews],
+      };
+    });
+
+    /* ---------------- PRICE FILTER ---------------- */
 
     const hasMin = minPrice !== undefined && minPrice !== '';
     const hasMax = maxPrice !== undefined && maxPrice !== '';
@@ -335,27 +571,29 @@ exports.getAllBusinesses = async (req, res) => {
         const items = [...(b.services || []), ...(b.musicLessons || [])];
 
         return items.some((item) => {
-          // RANGE pricing
           if (item.pricingType === 'range') {
             const itemMin = Number(item.minPrice);
             const itemMax = Number(item.maxPrice);
+
             if (isNaN(itemMin) || isNaN(itemMax)) return false;
 
-            // STRICT minPrice logic
             const minPass = itemMin >= min;
             const maxPass = itemMax <= max;
+
             if (hasMin && hasMax) return minPass && maxPass;
             if (hasMin) return minPass;
-            if (hasMax) return itemMax <= max;
+            if (hasMax) return maxPass;
           }
 
-          // EXACT pricing
           const price = Number(item.price);
+
           if (isNaN(price)) return false;
 
           if (hasMin && hasMax) return price >= min && price <= max;
           if (hasMin) return price >= min;
           if (hasMax) return price <= max;
+
+          return false;
         });
       });
     }
@@ -364,15 +602,22 @@ exports.getAllBusinesses = async (req, res) => {
 
     if (openNow === 'true') {
       const now = new Date();
-      const day = now.toLocaleString('en-us', { weekday: 'long' }).toLowerCase();
+      const day = now
+        .toLocaleString('en-us', {
+          weekday: 'long',
+        })
+        .toLowerCase();
+
       const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
       businesses = businesses.filter((b) => {
         const today = b.businessHours?.find((h) => h.day.toLowerCase() === day && h.enabled);
+
         if (!today) return false;
 
         const start =
           parseInt(today.startTime.split(':')[0]) * 60 + parseInt(today.startTime.split(':')[1]);
+
         const end =
           parseInt(today.endTime.split(':')[0]) * 60 + parseInt(today.endTime.split(':')[1]);
 
@@ -407,7 +652,10 @@ exports.getAllBusinesses = async (req, res) => {
       },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    return res.status(500).json({
+      success: false,
+      error: error.message,
+    });
   }
 };
 
