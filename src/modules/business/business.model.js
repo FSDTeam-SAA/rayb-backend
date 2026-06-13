@@ -21,7 +21,7 @@ const serviceSchema = new Schema(
     pricingType: {
       type: String,
       enum: ['exact', 'range', 'hourly'],
-      // required: true,
+      set: (value) => (value === '' ? undefined : value),
     },
     price: { type: Number, default: 0 },
     minPrice: { type: Number, default: 0 },
@@ -38,7 +38,7 @@ const musicLessonSchema = new Schema(
     pricingType: {
       type: String,
       enum: ['exact', 'range', 'hourly'],
-      // required: true,
+      set: (value) => (value === '' ? undefined : value),
     },
     price: { type: Number, default: 0 },
     minPrice: { type: Number, default: 0 },
