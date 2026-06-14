@@ -609,23 +609,34 @@ exports.getAllBusinesses = async (req, res) => {
           .toLowerCase();
 
       const parsedCurrentMinutes =
-        currentMinutes !== undefined && currentMinutes !== ''
-          ? Number(currentMinutes)
-          : null;
+        currentMinutes !== undefined && currentMinutes !== '' ? Number(currentMinutes) : null;
       const currentMinutesValue = Number.isNaN(parsedCurrentMinutes)
         ? now.getHours() * 60 + now.getMinutes()
         : parsedCurrentMinutes ?? now.getHours() * 60 + now.getMinutes();
+
+      const normalizeDay = (value) => value?.toString().trim().toLowerCase();
+
       const toMinutes = (time, meridiem) => {
         if (!time) return null;
 
-        const [hourValue, minuteValue = '0'] = time.split(':');
-        let hour = parseInt(hourValue, 10);
-        const minute = parseInt(minuteValue, 10);
+        const match = time
+          .toString()
+          .trim()
+          .match(/^(\d{1,2})(?::(\d{1,2}))?\s*([ap]\.?\s*m\.?)?$/i);
+
+        if (!match) return null;
+
+        let hour = Number(match[1]);
+        const minute = Number(match[2] || 0);
 
         if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
 
-        const normalizedMeridiem = meridiem?.toString().toLowerCase();
+        const normalizedMeridiem = (match[3] || meridiem || '')
+          .toString()
+          .replace(/\s|\./g, '')
+          .toLowerCase();
 
+        if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
         if (normalizedMeridiem === 'pm' && hour < 12) hour += 12;
         if (normalizedMeridiem === 'am' && hour === 12) hour = 0;
 
@@ -633,7 +644,9 @@ exports.getAllBusinesses = async (req, res) => {
       };
 
       businesses = businesses.filter((b) => {
-        const today = b.businessHours?.find((h) => h.day?.toLowerCase() === day && h.enabled);
+        const today = b.businessHours?.find(
+          (h) => normalizeDay(h.day) === normalizeDay(day) && h.enabled !== false,
+        );
 
         if (!today) return false;
 
