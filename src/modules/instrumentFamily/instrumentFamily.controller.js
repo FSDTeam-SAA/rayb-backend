@@ -160,9 +160,30 @@ const updateInstrumentName = async (req, res) => {
 
 
 
+// const updateInstrument = async (req, res) => {
+//   try {
+//     const { instrumentId, typeId } = req.params; // <-- both IDs
+//     const result = await instrumentService.updateInstrument(
+//       instrumentId,
+//       typeId,
+//       req.body
+//     );
+
+//     return res.status(200).json({
+//       success: true,
+//       code: 200,
+//       message: "Instrument updated successfully",
+//       data: result,
+//     });
+//   } catch (error) {
+//     return res.status(400).json({ success: false, message: error.message });
+//   }
+// };
+
 const updateInstrument = async (req, res) => {
   try {
-    const { instrumentId, typeId } = req.params; // <-- both IDs
+    const { instrumentId, typeId } = req.params;
+    
     const result = await instrumentService.updateInstrument(
       instrumentId,
       typeId,
@@ -176,7 +197,13 @@ const updateInstrument = async (req, res) => {
       data: result,
     });
   } catch (error) {
-    return res.status(400).json({ success: false, message: error.message });
+    // CRITICAL: Log this so you can see MongoDB specific errors in your terminal
+    console.error("Error updating instrument:", error); 
+    
+    return res.status(400).json({ 
+      success: false, 
+      message: error.message 
+    });
   }
 };
 

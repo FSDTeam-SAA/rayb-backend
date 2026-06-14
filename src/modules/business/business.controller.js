@@ -429,6 +429,8 @@ exports.getAllBusinesses = async (req, res) => {
       isMusicLessons,
       sort,
       openNow,
+      currentDay,
+      currentMinutes,
       postalCode,
       page = 1,
       limit = 40,
@@ -517,7 +519,7 @@ exports.getAllBusinesses = async (req, res) => {
 
     if (buyInstruments === 'true') query.buyInstruments = true;
     if (sellInstruments === 'true') query.sellInstruments = true;
-    if (offerMusicLessons === 'true') query.offerMusicLessons = true;
+    if (offerMusicLessons === 'true') query.isMusicLessons = true;
     if (tradeInstruments === 'true') query.tradeInstruments = true;
     if (rentInstruments === 'true') query.rentInstruments = true;
     if (isMusicLessons === 'true') query.isMusicLessons = true;
@@ -526,15 +528,11 @@ exports.getAllBusinesses = async (req, res) => {
 
     /* ---------------- FETCH FROM DB ---------------- */
 
-    const totalCount = await Business.countDocuments(query);
-
     let businesses = await Business.find(query)
       .populate({
         path: 'review',
         options: { sort: { createdAt: -1 } },
       })
-      .skip(skip)
-      .limit(limitNumber)
       .lean();
 
     /* ---------------- REVIEW LOGIC ---------------- */
@@ -577,8 +575,8 @@ exports.getAllBusinesses = async (req, res) => {
 
             if (isNaN(itemMin) || isNaN(itemMax)) return false;
 
-            const minPass = itemMin >= min;
-            const maxPass = itemMax <= max;
+            const minPass = itemMax >= min;
+            const maxPass = itemMin <= max;
 
             if (hasMin && hasMax) return minPass && maxPass;
             if (hasMin) return minPass;
@@ -602,26 +600,64 @@ exports.getAllBusinesses = async (req, res) => {
 
     if (openNow === 'true') {
       const now = new Date();
-      const day = now
-        .toLocaleString('en-us', {
-          weekday: 'long',
-        })
-        .toLowerCase();
+      const day =
+        currentDay?.toString().toLowerCase() ||
+        now
+          .toLocaleString('en-us', {
+            weekday: 'long',
+          })
+          .toLowerCase();
 
-      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      const parsedCurrentMinutes =
+        currentMinutes !== undefined && currentMinutes !== '' ? Number(currentMinutes) : null;
+      const currentMinutesValue = Number.isNaN(parsedCurrentMinutes)
+        ? now.getHours() * 60 + now.getMinutes()
+        : parsedCurrentMinutes ?? now.getHours() * 60 + now.getMinutes();
+
+      const normalizeDay = (value) => value?.toString().trim().toLowerCase();
+
+      const toMinutes = (time, meridiem) => {
+        if (!time) return null;
+
+        const match = time
+          .toString()
+          .trim()
+          .match(/^(\d{1,2})(?::(\d{1,2}))?\s*([ap]\.?\s*m\.?)?$/i);
+
+        if (!match) return null;
+
+        let hour = Number(match[1]);
+        const minute = Number(match[2] || 0);
+
+        if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
+
+        const normalizedMeridiem = (match[3] || meridiem || '')
+          .toString()
+          .replace(/\s|\./g, '')
+          .toLowerCase();
+
+        if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+        if (normalizedMeridiem === 'pm' && hour < 12) hour += 12;
+        if (normalizedMeridiem === 'am' && hour === 12) hour = 0;
+
+        return hour * 60 + minute;
+      };
 
       businesses = businesses.filter((b) => {
-        const today = b.businessHours?.find((h) => h.day.toLowerCase() === day && h.enabled);
+        const today = b.businessHours?.find(
+          (h) => normalizeDay(h.day) === normalizeDay(day) && h.enabled !== false,
+        );
 
         if (!today) return false;
 
-        const start =
-          parseInt(today.startTime.split(':')[0]) * 60 + parseInt(today.startTime.split(':')[1]);
+        const start = toMinutes(today.startTime, today.startMeridiem);
+        const end = toMinutes(today.endTime, today.endMeridiem);
 
-        const end =
-          parseInt(today.endTime.split(':')[0]) * 60 + parseInt(today.endTime.split(':')[1]);
+        if (start === null || end === null) return false;
 
-        return currentMinutes >= start && currentMinutes <= end;
+        if (end < start) return currentMinutesValue >= start || currentMinutesValue <= end;
+
+        return currentMinutesValue >= start && currentMinutesValue <= end;
       });
     }
 
@@ -630,20 +666,59 @@ exports.getAllBusinesses = async (req, res) => {
     if (sort) {
       const getMinPrice = (b) => {
         const prices = [...(b.services || []), ...(b.musicLessons || [])]
-          .map((x) => (x.pricingType === 'range' ? Number(x.minPrice) : Number(x.price)))
-          .filter((n) => !isNaN(n));
+          .map((x) => {
+            if (x.pricingType === 'range') return Number(x.minPrice);
+            return Number(x.price);
+          })
+          .filter((n) => !Number.isNaN(n));
 
-        return prices.length ? Math.min(...prices) : Infinity;
+        return prices.length ? Math.min(...prices) : null;
       };
 
-      businesses.sort((a, b) =>
-        sort === 'high-to-low' ? getMinPrice(b) - getMinPrice(a) : getMinPrice(a) - getMinPrice(b),
-      );
+      const comparePrices = (a, b, direction) => {
+        const priceA = getMinPrice(a);
+        const priceB = getMinPrice(b);
+
+        if (priceA === null && priceB === null) return 0;
+        if (priceA === null) return 1;
+        if (priceB === null) return -1;
+
+        return direction === 'desc' ? priceB - priceA : priceA - priceB;
+      };
+
+      const getAverageRating = (b) => {
+        const ratings = (b.review || [])
+          .map((review) => Number(review.rating))
+          .filter((rating) => !Number.isNaN(rating));
+
+        if (!ratings.length) return 0;
+
+        return ratings.reduce((total, rating) => total + rating, 0) / ratings.length;
+      };
+
+      if (sort === 'high-to-low') {
+        businesses.sort((a, b) => comparePrices(a, b, 'desc'));
+      }
+
+      if (sort === 'low-to-high') {
+        businesses.sort((a, b) => comparePrices(a, b, 'asc'));
+      }
+
+      if (sort === 'rating-high-to-low') {
+        businesses.sort((a, b) => getAverageRating(b) - getAverageRating(a));
+      }
+
+      if (sort === 'rating-low-to-high') {
+        businesses.sort((a, b) => getAverageRating(a) - getAverageRating(b));
+      }
     }
+
+    const totalCount = businesses.length;
+    const paginatedBusinesses = businesses.slice(skip, skip + limitNumber);
 
     return res.status(200).json({
       success: true,
-      data: businesses,
+      data: paginatedBusinesses,
       pagination: {
         total: totalCount,
         page: pageNumber,
@@ -1181,7 +1256,12 @@ exports.toggleBusinessStatus = async (req, res) => {
     business.status = status;
     await business.save();
 
-    const owner = business.userId;
+    const ownerEmail = business.email || business.businessInfo?.email;
+    const owner = business.userId
+      ? await User.findById(business.userId)
+      : ownerEmail
+        ? await User.findOne({ email: ownerEmail })
+        : null;
     if (owner) {
       const alreadyNotified = await Notification.findOne({
         receiverId: owner._id,
@@ -1190,11 +1270,12 @@ exports.toggleBusinessStatus = async (req, res) => {
       });
 
       if (!alreadyNotified) {
+        const io = req.app.get('io');
         // ---------- Create Notification ----------
-        await Notification.create({
+        const notify = await Notification.create({
           senderId: null, // system/admin
           receiverId: owner._id,
-          userType: business.user ? 'user' : 'admin',
+          userType: owner.userType || 'user',
           type: `business_${status}`,
           title: status === 'approved' ? 'Business Approved' : 'Business Rejected',
           message:
@@ -1206,6 +1287,8 @@ exports.toggleBusinessStatus = async (req, res) => {
             status,
           },
         });
+
+        io.to(`${owner._id}`).emit('new_notification', notify);
       }
     }
 
