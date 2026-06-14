@@ -95,70 +95,132 @@ const updateInstrumentName = async (instrumentId, payload) => {
 //   return result;
 // };
 
+// const updateInstrument = async (instrumentId, typeId, payload) => {
+//   const { action, serviceType } = payload;
+
+//   if (!Array.isArray(serviceType)) {
+//     throw new Error('serviceType must be an array');
+//   }
+
+//   const instrument = await InstrumentFamilyModel.findOne({
+//     _id: instrumentId,
+//     'instrumentTypes._id': typeId,
+//   });
+
+//   if (!instrument) {
+//     throw new Error('Instrument family or instrument type not found');
+//   }
+
+//   let updateQuery = {};
+
+//   switch (action) {
+//     case 'add':
+//       updateQuery = {
+//         $addToSet: {
+//           'instrumentTypes.$.serviceType': {
+//             $each: serviceType,
+//           },
+//         },
+//       };
+//       break;
+
+//     case 'remove':
+//       updateQuery = {
+//         $pull: {
+//           'instrumentTypes.$.serviceType': {
+//             $in: serviceType,
+//           },
+//         },
+//       };
+//       break;
+
+//     case 'replace':
+//       updateQuery = {
+//         $set: {
+//           'instrumentTypes.$.serviceType': serviceType,
+//         },
+//       };
+//       break;
+
+//     default:
+//       throw new Error('Invalid action. Use add, remove, or replace');
+//   }
+
+//   const result = await InstrumentFamilyModel.findOneAndUpdate(
+//     {
+//       _id: instrumentId,
+//       'instrumentTypes._id': typeId,
+//     },
+//     updateQuery,
+//     {
+//       new: true,
+//     },
+//   );
+
+//   return result;
+// };
+
 const updateInstrument = async (instrumentId, typeId, payload) => {
-  const { action, serviceType } = payload;
-
-  if (!Array.isArray(serviceType)) {
-    throw new Error('serviceType must be an array');
-  }
-
-  const instrument = await InstrumentFamilyModel.findOne({
-    _id: instrumentId,
-    'instrumentTypes._id': typeId,
-  });
-
-  if (!instrument) {
-    throw new Error('Instrument family or instrument type not found');
-  }
-
   let updateQuery = {};
 
+  // 1. THIS IS WHERE THE SWITCH BLOCK GOES
+  // It checks for payload.action first, then falls back to payload.replace
+  const action = payload.action || (payload.replace ? "replace" : "add");
+
   switch (action) {
-    case 'add':
+    case "replace":
       updateQuery = {
-        $addToSet: {
-          'instrumentTypes.$.serviceType': {
-            $each: serviceType,
-          },
+        $set: { 
+          "instrumentTypes.$.serviceType": payload.serviceType 
         },
       };
       break;
 
-    case 'remove':
+    case "add":
+      const itemsToAdd = Array.isArray(payload.serviceType)
+        ? payload.serviceType
+        : [payload.serviceType];
+
       updateQuery = {
-        $pull: {
-          'instrumentTypes.$.serviceType': {
-            $in: serviceType,
-          },
+        $addToSet: { 
+          "instrumentTypes.$.serviceType": { $each: itemsToAdd } 
         },
       };
       break;
 
-    case 'replace':
+    case "remove":
+      const itemsToRemove = Array.isArray(payload.serviceType)
+        ? payload.serviceType
+        : [payload.serviceType];
+
       updateQuery = {
-        $set: {
-          'instrumentTypes.$.serviceType': serviceType,
+        $pull: { 
+          "instrumentTypes.$.serviceType": { $in: itemsToRemove } 
         },
       };
       break;
 
     default:
-      throw new Error('Invalid action. Use add, remove, or replace');
+      throw new Error("Invalid action. Use add, remove, or replace");
   }
 
+  // 2. Execute the update using the query constructed above
   const result = await InstrumentFamilyModel.findOneAndUpdate(
-    {
-      _id: instrumentId,
-      'instrumentTypes._id': typeId,
+    { 
+      _id: instrumentId, 
+      "instrumentTypes._id": typeId 
     },
     updateQuery,
-    {
-      new: true,
-    },
+    { new: true, runValidators: true }
   );
+
+  if (!result) {
+    throw new Error("Instrument family or type not found");
+  }
 
   return result;
 };
+
 
 const deleteInstrument = async (instrumentId) => {
   const instrument = await InstrumentFamilyModel.findById(instrumentId);
