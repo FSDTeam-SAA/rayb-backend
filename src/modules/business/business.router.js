@@ -103,7 +103,7 @@ router.patch(
     }
     next();
   },
-  // auth(USER_ROLE.admin, USER_ROLE.businessMan, USER_ROLE.user),
+  auth(USER_ROLE.admin, USER_ROLE.businessMan, USER_ROLE.user),
   updateBusiness
 );
 
