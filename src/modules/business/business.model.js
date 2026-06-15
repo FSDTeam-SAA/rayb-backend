@@ -48,6 +48,14 @@ const musicLessonSchema = new Schema(
   { _id: false },
 );
 
+const selectedInstrumentSchema = new Schema(
+  {
+    instrumentName: { type: String, required: true },
+    instrumentFamily: { type: String, required: true },
+  },
+  { _id: false },
+);
+
 const businessSchema = new Schema(
   {
     userId: { type: Schema.Types.ObjectId, ref: 'User' },
@@ -67,6 +75,7 @@ const businessSchema = new Schema(
       description: { type: String, required: true },
       postalCode: { type: String },
     },
+    selectedInstruments: [selectedInstrumentSchema],
     services: [serviceSchema],
     musicLessons: [musicLessonSchema],
     businessHours: [businessHoursSchema],
