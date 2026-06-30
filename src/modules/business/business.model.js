@@ -44,6 +44,9 @@ const musicLessonSchema = new Schema(
     minPrice: { type: Number, default: 0 },
     maxPrice: { type: Number, default: 0 },
     selectedInstrumentsGroupMusic: { type: String, required: true },
+    instrumentFamily: {
+      type: String,
+    },
   },
   { _id: false },
 );
