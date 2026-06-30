@@ -1,13 +1,13 @@
-const config = require("../../config");
-const { sendImageToCloudinary } = require("../../utils/cloudnary");
-const sendEmail = require("../../utils/sendEmail");
-const { createToken } = require("../../utils/tokenGenerate");
-const verificationCodeTemplate = require("../../utils/verificationCodeTemplate");
-const Business = require("../business/business.model");
-const ClaimBussiness = require("../claimBussiness/claimBussiness.model");
-const Notification = require("../notification/notification.model");
-const User = require("./user.model");
-const bcrypt = require("bcrypt");
+const config = require('../../config');
+const { sendImageToCloudinary } = require('../../utils/cloudnary');
+const sendEmail = require('../../utils/sendEmail');
+const { createToken } = require('../../utils/tokenGenerate');
+const verificationCodeTemplate = require('../../utils/verificationCodeTemplate');
+const Business = require('../business/business.model');
+const ClaimBussiness = require('../claimBussiness/claimBussiness.model');
+const Notification = require('../notification/notification.model');
+const User = require('./user.model');
+const bcrypt = require('bcrypt');
 
 const createNewAccountInDB = async (payload) => {
   const email = payload.email.toLowerCase();
@@ -18,11 +18,11 @@ const createNewAccountInDB = async (payload) => {
   const existingUser = await User.findOne({ email });
 
   if (existingUser) {
-    throw new Error("User already exists");
+    throw new Error('User already exists');
   }
 
   if (payload.password.length < 8) {
-    throw new Error("Password must be at least 8 characters long");
+    throw new Error('Password must be at least 8 characters long');
   }
 
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -48,7 +48,7 @@ const createNewAccountInDB = async (payload) => {
 
   await sendEmail({
     to: result.email,
-    subject: "Verify your email",
+    subject: 'Verify your email',
     html: verificationCodeTemplate(otp),
   });
 
@@ -58,11 +58,7 @@ const createNewAccountInDB = async (payload) => {
     userType: result.userType,
   };
 
-  const accessToken = createToken(
-    JwtToken,
-    config.JWT_SECRET,
-    config.JWT_EXPIRES_IN,
-  );
+  const accessToken = createToken(JwtToken, config.JWT_SECRET, config.JWT_EXPIRES_IN);
 
   const refreshToken = createToken(
     JwtToken,
@@ -85,11 +81,11 @@ const createNewAccountInDB = async (payload) => {
   //   await result.save();
   // }
 
-  const admin = await User.findOne({ userType: "admin" });
+  const admin = await User.findOne({ userType: 'admin' });
   if (admin) {
     const alreadyNotified = await Notification.findOne({
       receiverId: admin._id,
-      type: "user_created",
+      type: 'user_created',
       metadata: {
         userId: result._id,
         userType: result.userType,
@@ -100,9 +96,9 @@ const createNewAccountInDB = async (payload) => {
       await Notification.create({
         senderId: result._id,
         receiverId: admin._id,
-        userType: "admin",
-        type: "user_created",
-        title: "New User Created",
+        userType: 'admin',
+        type: 'user_created',
+        title: 'New User Created',
         message: `New user ${result.name} created`,
         metadata: {
           userId: result._id,
@@ -126,36 +122,34 @@ const createNewAccountInDB = async (payload) => {
 
 const verifyUserEmail = async (payload, email) => {
   const { otp } = payload;
-  if (!otp) throw new Error("OTP is required");
+  if (!otp) throw new Error('OTP is required');
 
   const existingUser = await User.findOne({ email });
-  if (!existingUser) throw new Error("User not found");
+  if (!existingUser) throw new Error('User not found');
 
   if (!existingUser.otp || !existingUser.otpExpires) {
-    throw new Error("OTP not requested or expired");
+    throw new Error('OTP not requested or expired');
   }
 
   if (existingUser.otpExpires < new Date()) {
-    throw new Error("OTP has expired");
+    throw new Error('OTP has expired');
   }
 
   const isOtpMatched = await bcrypt.compare(otp.toString(), existingUser.otp);
-  if (!isOtpMatched) throw new Error("Invalid OTP");
+  if (!isOtpMatched) throw new Error('Invalid OTP');
 
   const result = await User.findOneAndUpdate(
     { email },
     {
       isVerified: true,
-      $unset: { otp: "", otpExpires: "" },
+      $unset: { otp: '', otpExpires: '' },
     },
     { new: true },
-  ).select(
-    "-password -otp -otpExpires -resetPasswordOtp -resetPasswordOtpExpires",
-  );
+  ).select('-password -otp -otpExpires -resetPasswordOtp -resetPasswordOtpExpires');
 
   const response = {
     success: true,
-    message: "Email verified successfully",
+    message: 'Email verified successfully',
     data: result,
   };
 
@@ -167,11 +161,7 @@ const verifyUserEmail = async (payload, email) => {
       userType: result.userType,
     };
 
-    const accessToken = createToken(
-      JwtToken,
-      config.JWT_SECRET,
-      config.JWT_EXPIRES_IN,
-    );
+    const accessToken = createToken(JwtToken, config.JWT_SECRET, config.JWT_EXPIRES_IN);
 
     response.accessToken = accessToken;
   }
@@ -182,10 +172,10 @@ const verifyUserEmail = async (payload, email) => {
 const resendOtpCode = async ({ email }) => {
   const existingUser = await User.findOne({ email });
 
-  if (!existingUser) throw new Error("User not found");
+  if (!existingUser) throw new Error('User not found');
 
   if (existingUser.isVerified) {
-    throw new Error("User already verified");
+    throw new Error('User already verified');
   }
 
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -199,34 +189,34 @@ const resendOtpCode = async ({ email }) => {
       otpExpires,
     },
     { new: true },
-  ).select("name email userType");
+  ).select('name email userType');
 
   await sendEmail({
     to: existingUser.email,
-    subject: "Verify your email",
+    subject: 'Verify your email',
     html: verificationCodeTemplate(otp),
   });
   return result;
 };
 
 const getAllUsersFromDb = async ({ userType, sortBy, time }) => {
-  const filter = { isVerified: true, isDelete: { $ne: true } };
+  const filter = { isVerified: true };
 
-  if (userType && ["user", "businessOwner", "businessMan"].includes(userType)) {
+  if (userType && ['user', 'businessMan', 'businessMan'].includes(userType)) {
     filter.userType = userType;
   }
 
-  if (sortBy === "deactivated") {
+  if (sortBy === 'deactivated') {
     filter.isActive = false;
   }
 
-  if (time && ["last-7", "last-30"].includes(time)) {
+  if (time && ['last-7', 'last-30'].includes(time)) {
     const now = new Date();
     const pastDate = new Date();
 
-    if (time === "last-7") {
+    if (time === 'last-7') {
       pastDate.setDate(now.getDate() - 7);
-    } else if (time === "last-30") {
+    } else if (time === 'last-30') {
       pastDate.setDate(now.getDate() - 30);
     }
     filter.createdAt = { $gte: pastDate };
@@ -234,36 +224,34 @@ const getAllUsersFromDb = async ({ userType, sortBy, time }) => {
 
   let sortQuery = { createdAt: -1 };
 
-  if (sortBy === "latest") {
+  if (sortBy === 'latest') {
     sortQuery = { createdAt: -1 };
-  } else if (sortBy === "oldest") {
+  } else if (sortBy === 'oldest') {
     sortQuery = { createdAt: 1 };
-  } else if (sortBy === "name") {
+  } else if (sortBy === 'name') {
     sortQuery = { name: 1 };
   }
 
-  const users = await User.find(filter)
-    .select("-password -otp -otpExpires")
-    .sort(sortQuery);
+  const users = await User.find(filter).select('-password -otp -otpExpires').sort(sortQuery);
 
   return users;
 };
 
 const getMyProfileFromDb = async ({ email }) => {
   const user = await User.findOne({ email })
-    .select("name email userType imageLink bio address phone")
+    .select('name email userType imageLink bio address phone')
     .populate({
-      path: "businessId",
-      select: "businessInfo",
+      path: 'businessId',
+      select: 'businessInfo',
     });
-  if (!user) throw new Error("User not found");
+  if (!user) throw new Error('User not found');
 
   return user;
 };
 
 const updateUserProfile = async (payload, email, file) => {
   const isExistingUser = await User.findOne({ email });
-  if (!isExistingUser) throw new Error("User not found");
+  if (!isExistingUser) throw new Error('User not found');
 
   if (file) {
     const imageName = `${Date.now()}-${file.originalname}`;
@@ -278,7 +266,7 @@ const updateUserProfile = async (payload, email, file) => {
     },
     payload,
     { new: true },
-  ).select("-password -otp -otpExpires");
+  ).select('-password -otp -otpExpires');
   return updatedUser;
 };
 
@@ -289,7 +277,7 @@ const deactiveAccount = async (email, payload) => {
     session.startTransaction();
 
     const isExistingUser = await User.findOne({ email }).session(session);
-    if (!isExistingUser) throw new Error("User not found");
+    if (!isExistingUser) throw new Error('User not found');
 
     const now = new Date();
     // const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days
@@ -318,12 +306,12 @@ const deactiveAccount = async (email, payload) => {
 };
 
 const deletedUserAccount = async (userId) => {
-  const user = await User.findById(userId).select("-password -otp -otpExpires");
-  if (!user) throw new Error("User not found");
+  const user = await User.findById(userId).select('-password -otp -otpExpires');
+  if (!user) throw new Error('User not found');
 
   const claimBusinesses = await ClaimBussiness.find({
     userId: user._id,
-    status: "approved",
+    status: 'approved',
   });
 
   if (claimBusinesses && claimBusinesses.length > 0) {
@@ -335,12 +323,8 @@ const deletedUserAccount = async (userId) => {
 
       if (business) {
         if (business.isActive) {
-          throw new Error(
-            "User has active business. Please deactivate or delete it first.",
-          );
+          throw new Error('User has active business. Please deactivate or delete it first.');
         }
-
-        // throw new Error("User has business records. Please delete them first.");
       }
     }
   }
@@ -349,8 +333,8 @@ const deletedUserAccount = async (userId) => {
     userId,
     {
       $set: {
-        isDelete: true,
-        isActive: false,
+        isDelete: !user.isDelete,
+        isActive: user.isDelete ? true : false,
       },
     },
     {
@@ -358,18 +342,17 @@ const deletedUserAccount = async (userId) => {
     },
   );
 
-  if (!deletedUser) throw new Error("User delete failed");
+  if (!deletedUser) throw new Error('User delete failed');
 
   return deletedUser;
 };
 
 const addSupport = async (payload) => {
   const { email, support } = payload;
-  if (!email || !support)
-    throw new Error("Email and support message are required");
+  if (!email || !support) throw new Error('Email and support message are required');
 
   const user = await User.findOne({ email });
-  if (!user) throw new Error("User not found");
+  if (!user) throw new Error('User not found');
 
   const updatedUser = await User.findByIdAndUpdate(
     {
@@ -381,23 +364,23 @@ const addSupport = async (payload) => {
     {
       new: true,
     },
-  ).select("name email support");
+  ).select('name email support');
 
   return updatedUser;
 };
 
 const getSingleUser = async (userId) => {
   const user = await User.findById(userId).select(
-    "-password -otp -otpExpires -resetPasswordOtp -resetPasswordOtpExpires -__v",
+    '-password -otp -otpExpires -resetPasswordOtp -resetPasswordOtpExpires -__v',
   );
-  if (!user) throw new Error("User not found");
+  if (!user) throw new Error('User not found');
 
   return user;
 };
 
 const toggleUserStatus = async (userId) => {
   const user = await User.findById(userId);
-  if (!user) throw new Error("User not found");
+  if (!user) throw new Error('User not found');
 
   // যদি current isActive = true → এবার suspend করতে হবে
   if (user.isActive) {
@@ -414,8 +397,7 @@ const toggleUserStatus = async (userId) => {
     // user currently inactive → unsuspend
     user.isActive = true;
 
-    const lastSuspension =
-      user.suspensionHistory[user.suspensionHistory.length - 1];
+    const lastSuspension = user.suspensionHistory[user.suspensionHistory.length - 1];
     if (lastSuspension && !lastSuspension.unsuspendAt) {
       lastSuspension.unsuspendAt = new Date();
     }
