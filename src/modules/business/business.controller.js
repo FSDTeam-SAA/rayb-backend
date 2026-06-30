@@ -343,23 +343,23 @@ exports.getAllBusinesses = async (req, res) => {
     });
 
     //! new added .................
-    // if (selectedInstrumentsGroup) {
-    //   const regexArr = toRegexArray(selectedInstrumentsGroup);
+    if (selectedInstrumentsGroup) {
+      const regexArr = toRegexArray(selectedInstrumentsGroup);
 
-    //   businesses = businesses
-    //     .map((business) => ({
-    //       ...business,
+      businesses = businesses
+        .map((business) => ({
+          ...business,
 
-    //       services: (business.services || []).filter((service) =>
-    //         regexArr.some((regex) => regex.test(service.selectedInstrumentsGroup)),
-    //       ),
+          services: (business.services || []).filter((service) =>
+            regexArr.some((regex) => regex.test(service.selectedInstrumentsGroup)),
+          ),
 
-    //       musicLessons: (business.musicLessons || []).filter((lesson) =>
-    //         regexArr.some((regex) => regex.test(lesson.selectedInstrumentsGroupMusic)),
-    //       ),
-    //     }))
-    //     .filter((business) => business.services.length > 0 || business.musicLessons.length > 0);
-    // }
+          musicLessons: (business.musicLessons || []).filter((lesson) =>
+            regexArr.some((regex) => regex.test(lesson.selectedInstrumentsGroupMusic)),
+          ),
+        }))
+        .filter((business) => business.services.length > 0 || business.musicLessons.length > 0);
+    }
 
     /* ---------------- PRICE FILTER ---------------- */
 
