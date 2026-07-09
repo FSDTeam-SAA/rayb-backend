@@ -10,7 +10,12 @@ const SavedBusinessModel = require('../savedBusiness/SavedBusiness.model');
 const Notification = require('../notification/notification.model');
 const { GOOGLE_API_KEY } = require('../../config');
 const axios = require('axios');
-const { getBusinessPricingStatus, getHighestPrice, getLowestPrice } = require('../../lib/helper');
+const {
+  getBusinessPricingStatus,
+  getHighestPrice,
+  getLowestPrice,
+  getEffectivePrice,
+} = require('../../lib/helper');
 
 exports.createBusiness = async (req, res) => {
   try {
@@ -363,6 +368,8 @@ exports.getAllBusinesses = async (req, res) => {
 
     /* ---------------- PRICE FILTER ---------------- */
 
+    /* ---------------- PRICE FILTER ---------------- */
+
     const hasMin = minPrice !== undefined && minPrice !== '';
     const hasMax = maxPrice !== undefined && maxPrice !== '';
 
@@ -374,68 +381,13 @@ exports.getAllBusinesses = async (req, res) => {
         const items = [...(b.services || []), ...(b.musicLessons || [])];
 
         return items.some((item) => {
-          // CONTACT FOR PRICING ignore
-          const hasExactPrice = item.price !== null && item.price !== undefined;
+          const effectivePrice = getEffectivePrice(item);
 
-          const hasRangePrice =
-            item.minPrice !== null &&
-            item.minPrice !== undefined &&
-            item.maxPrice !== null &&
-            item.maxPrice !== undefined;
+          if (effectivePrice === null) return false;
 
-          if (!hasExactPrice && !hasRangePrice) {
-            return false;
-          }
-
-          // RANGE PRICING
-          if (item.pricingType === 'range') {
-            const itemMin = Number(item.minPrice);
-            const itemMax = Number(item.maxPrice);
-
-            if (Number.isNaN(itemMin) || Number.isNaN(itemMax)) {
-              return false;
-            }
-
-            // STRICT FILTERING
-
-            if (hasMin && hasMax) {
-              return itemMin >= min && itemMax <= max;
-            }
-
-            if (hasMin) {
-              return itemMin >= min;
-            }
-
-            if (hasMax) {
-              return itemMax <= max;
-            }
-
-            return false;
-          }
-
-          // EXACT / HOURLY PRICING
-
-          if (!hasExactPrice) {
-            return false;
-          }
-
-          const price = Number(item.price);
-
-          if (Number.isNaN(price)) {
-            return false;
-          }
-
-          if (hasMin && hasMax) {
-            return price >= min && price <= max;
-          }
-
-          if (hasMin) {
-            return price >= min;
-          }
-
-          if (hasMax) {
-            return price <= max;
-          }
+          if (hasMin && hasMax) return effectivePrice >= min && effectivePrice <= max;
+          if (hasMin) return effectivePrice >= min;
+          if (hasMax) return effectivePrice <= max;
 
           return false;
         });
