@@ -242,7 +242,6 @@ exports.getAllBusinesses = async (req, res) => {
         $or: regexArr.flatMap((regex) => [
           { 'businessInfo.name': regex },
           { 'services.newInstrumentName': regex },
-          { 'musicLessons.newInstrumentName': regex },
           { 'services.instrumentFamily': regex },
           { 'selectedInstruments.instrumentFamily': regex },
           { 'selectedInstruments.instrumentName': regex },
@@ -280,7 +279,6 @@ exports.getAllBusinesses = async (req, res) => {
       query.$and.push({
         $or: regexArr.flatMap((regex) => [
           { 'services.instrumentFamily': regex },
-          { 'selectedInstruments.instrumentFamily': regex },
         ]),
       });
     }
@@ -290,8 +288,6 @@ exports.getAllBusinesses = async (req, res) => {
       query.$and.push({
         $or: regexArr.flatMap((regex) => [
           { 'services.selectedInstrumentsGroup': regex },
-          { 'selectedInstruments.instrumentName': regex },
-          { 'musicLessons.selectedInstrumentsGroupMusic': regex },
         ]),
       });
     }
@@ -301,7 +297,6 @@ exports.getAllBusinesses = async (req, res) => {
       query.$and.push({
         $or: regexArr.flatMap((regex) => [
           { 'services.newInstrumentName': regex },
-          { 'musicLessons.newInstrumentName': regex },
         ]),
       });
     }
@@ -347,23 +342,31 @@ exports.getAllBusinesses = async (req, res) => {
       };
     });
 
-    //! new added .................
-    if (selectedInstrumentsGroup) {
-      const regexArr = toRegexArray(selectedInstrumentsGroup);
-
+    if (selectedInstrumentsGroup || instrumentFamily) {
       businesses = businesses
-        .map((business) => ({
-          ...business,
+        .map((business) => {
+          let filteredServices = business.services || [];
 
-          services: (business.services || []).filter((service) =>
-            regexArr.some((regex) => regex.test(service.selectedInstrumentsGroup)),
-          ),
+          if (selectedInstrumentsGroup) {
+            const regexArr = toRegexArray(selectedInstrumentsGroup);
+            filteredServices = filteredServices.filter((service) =>
+              regexArr.some((regex) => regex.test(service.selectedInstrumentsGroup)),
+            );
+          }
 
-          musicLessons: (business.musicLessons || []).filter((lesson) =>
-            regexArr.some((regex) => regex.test(lesson.selectedInstrumentsGroupMusic)),
-          ),
-        }))
-        .filter((business) => business.services.length > 0 || business.musicLessons.length > 0);
+          if (instrumentFamily) {
+            const regexArr = toRegexArray(instrumentFamily);
+            filteredServices = filteredServices.filter((service) =>
+              regexArr.some((regex) => regex.test(service.instrumentFamily)),
+            );
+          }
+
+          return {
+            ...business,
+            services: filteredServices,
+          };
+        })
+        .filter((business) => business.services.length > 0);
     }
 
     /* ---------------- PRICE FILTER ---------------- */
@@ -378,7 +381,7 @@ exports.getAllBusinesses = async (req, res) => {
       const max = hasMax ? Number(maxPrice) : Number.MAX_SAFE_INTEGER;
 
       businesses = businesses.filter((b) => {
-        const items = [...(b.services || []), ...(b.musicLessons || [])];
+        const items = b.services || [];
 
         return items.some((item) => {
           const effectivePrice = getEffectivePrice(item);
@@ -673,11 +676,11 @@ exports.getBusinessById = async (req, res) => {
 
       claimInfo: claim
         ? {
-            userId: claim.userId,
-            status: claim.status,
-            isVerified: claim.isVerified,
-            documents: claim.documents,
-          }
+          userId: claim.userId,
+          status: claim.status,
+          isVerified: claim.isVerified,
+          documents: claim.documents,
+        }
         : null,
 
       images: allImages,
