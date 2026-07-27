@@ -277,27 +277,21 @@ exports.getAllBusinesses = async (req, res) => {
     if (instrumentFamily) {
       const regexArr = toRegexArray(instrumentFamily);
       query.$and.push({
-        $or: regexArr.flatMap((regex) => [
-          { 'services.instrumentFamily': regex },
-        ]),
+        $or: regexArr.flatMap((regex) => [{ 'services.instrumentFamily': regex }]),
       });
     }
 
     if (selectedInstrumentsGroup) {
       const regexArr = toRegexArray(selectedInstrumentsGroup);
       query.$and.push({
-        $or: regexArr.flatMap((regex) => [
-          { 'services.selectedInstrumentsGroup': regex },
-        ]),
+        $or: regexArr.flatMap((regex) => [{ 'services.selectedInstrumentsGroup': regex }]),
       });
     }
 
     if (newInstrumentName) {
       const regexArr = toRegexArray(newInstrumentName);
       query.$and.push({
-        $or: regexArr.flatMap((regex) => [
-          { 'services.newInstrumentName': regex },
-        ]),
+        $or: regexArr.flatMap((regex) => [{ 'services.newInstrumentName': regex }]),
       });
     }
 
@@ -308,7 +302,11 @@ exports.getAllBusinesses = async (req, res) => {
     if (offerMusicLessons === 'true') query.isMusicLessons = true;
     if (tradeInstruments === 'true') query.tradeInstruments = true;
     if (rentInstruments === 'true') query.rentInstruments = true;
-    if (isMusicLessons === 'true') query.isMusicLessons = true;
+    // if (isMusicLessons === 'true') query.isMusicLessons = true;
+    if (isMusicLessons === 'true') {
+      query.isMusicLessons = true;
+      query['musicLessons.0'] = { $exists: true };
+    }
 
     if (query.$and.length === 0) delete query.$and;
 
@@ -676,11 +674,11 @@ exports.getBusinessById = async (req, res) => {
 
       claimInfo: claim
         ? {
-          userId: claim.userId,
-          status: claim.status,
-          isVerified: claim.isVerified,
-          documents: claim.documents,
-        }
+            userId: claim.userId,
+            status: claim.status,
+            isVerified: claim.isVerified,
+            documents: claim.documents,
+          }
         : null,
 
       images: allImages,

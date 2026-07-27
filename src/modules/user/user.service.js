@@ -66,21 +66,6 @@ const createNewAccountInDB = async (payload) => {
     config.jwtRefreshTokenExpiresIn,
   );
 
-  // 🔹 Business auto-link
-  // const business = await Business.findOne({ email: result.email });
-
-  // if (business) {
-  //   await Business.findOneAndUpdate(
-  //     { email: result.email },
-  //     { userId: result._id },
-  //     { new: true },
-  //   );
-
-  //   result.businessId = business._id;
-  //   result.userType = "user";
-  //   await result.save();
-  // }
-
   const admin = await User.findOne({ userType: 'admin' });
   if (admin) {
     const alreadyNotified = await Notification.findOne({
