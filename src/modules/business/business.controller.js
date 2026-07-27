@@ -242,7 +242,6 @@ exports.getAllBusinesses = async (req, res) => {
         $or: regexArr.flatMap((regex) => [
           { 'businessInfo.name': regex },
           { 'services.newInstrumentName': regex },
-          { 'musicLessons.newInstrumentName': regex },
           { 'services.instrumentFamily': regex },
           { 'selectedInstruments.instrumentFamily': regex },
           { 'selectedInstruments.instrumentName': regex },
@@ -278,31 +277,21 @@ exports.getAllBusinesses = async (req, res) => {
     if (instrumentFamily) {
       const regexArr = toRegexArray(instrumentFamily);
       query.$and.push({
-        $or: regexArr.flatMap((regex) => [
-          { 'services.instrumentFamily': regex },
-          { 'selectedInstruments.instrumentFamily': regex },
-        ]),
+        $or: regexArr.flatMap((regex) => [{ 'services.instrumentFamily': regex }]),
       });
     }
 
     if (selectedInstrumentsGroup) {
       const regexArr = toRegexArray(selectedInstrumentsGroup);
       query.$and.push({
-        $or: regexArr.flatMap((regex) => [
-          { 'services.selectedInstrumentsGroup': regex },
-          { 'selectedInstruments.instrumentName': regex },
-          { 'musicLessons.selectedInstrumentsGroupMusic': regex },
-        ]),
+        $or: regexArr.flatMap((regex) => [{ 'services.selectedInstrumentsGroup': regex }]),
       });
     }
 
     if (newInstrumentName) {
       const regexArr = toRegexArray(newInstrumentName);
       query.$and.push({
-        $or: regexArr.flatMap((regex) => [
-          { 'services.newInstrumentName': regex },
-          { 'musicLessons.newInstrumentName': regex },
-        ]),
+        $or: regexArr.flatMap((regex) => [{ 'services.newInstrumentName': regex }]),
       });
     }
 
@@ -313,7 +302,11 @@ exports.getAllBusinesses = async (req, res) => {
     if (offerMusicLessons === 'true') query.isMusicLessons = true;
     if (tradeInstruments === 'true') query.tradeInstruments = true;
     if (rentInstruments === 'true') query.rentInstruments = true;
-    if (isMusicLessons === 'true') query.isMusicLessons = true;
+    // if (isMusicLessons === 'true') query.isMusicLessons = true;
+    if (isMusicLessons === 'true') {
+      query.isMusicLessons = true;
+      query['musicLessons.0'] = { $exists: true };
+    }
 
     if (query.$and.length === 0) delete query.$and;
 
@@ -347,23 +340,31 @@ exports.getAllBusinesses = async (req, res) => {
       };
     });
 
-    //! new added .................
-    if (selectedInstrumentsGroup) {
-      const regexArr = toRegexArray(selectedInstrumentsGroup);
-
+    if (selectedInstrumentsGroup || instrumentFamily) {
       businesses = businesses
-        .map((business) => ({
-          ...business,
+        .map((business) => {
+          let filteredServices = business.services || [];
 
-          services: (business.services || []).filter((service) =>
-            regexArr.some((regex) => regex.test(service.selectedInstrumentsGroup)),
-          ),
+          if (selectedInstrumentsGroup) {
+            const regexArr = toRegexArray(selectedInstrumentsGroup);
+            filteredServices = filteredServices.filter((service) =>
+              regexArr.some((regex) => regex.test(service.selectedInstrumentsGroup)),
+            );
+          }
 
-          musicLessons: (business.musicLessons || []).filter((lesson) =>
-            regexArr.some((regex) => regex.test(lesson.selectedInstrumentsGroupMusic)),
-          ),
-        }))
-        .filter((business) => business.services.length > 0 || business.musicLessons.length > 0);
+          if (instrumentFamily) {
+            const regexArr = toRegexArray(instrumentFamily);
+            filteredServices = filteredServices.filter((service) =>
+              regexArr.some((regex) => regex.test(service.instrumentFamily)),
+            );
+          }
+
+          return {
+            ...business,
+            services: filteredServices,
+          };
+        })
+        .filter((business) => business.services.length > 0);
     }
 
     /* ---------------- PRICE FILTER ---------------- */
@@ -378,7 +379,7 @@ exports.getAllBusinesses = async (req, res) => {
       const max = hasMax ? Number(maxPrice) : Number.MAX_SAFE_INTEGER;
 
       businesses = businesses.filter((b) => {
-        const items = [...(b.services || []), ...(b.musicLessons || [])];
+        const items = b.services || [];
 
         return items.some((item) => {
           const effectivePrice = getEffectivePrice(item);
