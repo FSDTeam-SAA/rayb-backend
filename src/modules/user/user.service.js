@@ -366,6 +366,9 @@ const getSingleUser = async (userId) => {
 const toggleUserStatus = async (userId) => {
   const user = await User.findById(userId);
   if (!user) throw new Error('User not found');
+  if (user.isDelete) {
+    throw new Error('Deleted users cannot be suspended or unsuspended.');
+  }
 
   // যদি current isActive = true → এবার suspend করতে হবে
   if (user.isActive) {
