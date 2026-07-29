@@ -368,9 +368,6 @@ exports.getAllBusinesses = async (req, res) => {
     }
 
     /* ---------------- PRICE FILTER ---------------- */
-
-    /* ---------------- PRICE FILTER ---------------- */
-
     const hasMin = minPrice !== undefined && minPrice !== '';
     const hasMax = maxPrice !== undefined && maxPrice !== '';
 
@@ -382,9 +379,10 @@ exports.getAllBusinesses = async (req, res) => {
         const items = b.services || [];
 
         return items.some((item) => {
-          const effectivePrice = getEffectivePrice(item);
+          const effectivePrice =
+            item.price !== null && item.price !== undefined ? Number(item.price) : null;
 
-          if (effectivePrice === null) return false;
+          if (effectivePrice === null || Number.isNaN(effectivePrice)) return false;
 
           if (hasMin && hasMax) return effectivePrice >= min && effectivePrice <= max;
           if (hasMin) return effectivePrice >= min;
@@ -481,13 +479,23 @@ exports.getAllBusinesses = async (req, res) => {
         }
 
         if (statusA === 1) {
-          const priceA = getHighestPrice(a) ?? 0;
-          const priceB = getHighestPrice(b) ?? 0;
-
-          return priceB - priceA;
+          return (getHighestPrice(b) ?? 0) - (getHighestPrice(a) ?? 0);
         }
 
         return 0;
+      });
+    }
+
+    if (sort === 'high-to-low') {
+      businesses.sort((a, b) => {
+        const statusA = getBusinessPricingStatus(a);
+        const statusB = getBusinessPricingStatus(b);
+
+        if (statusA !== statusB) {
+          return statusA - statusB;
+        }
+
+        return (getHighestPrice(b) ?? 0) - (getHighestPrice(a) ?? 0);
       });
     } else if (sort === 'low-to-high') {
       businesses.sort((a, b) => {
@@ -498,14 +506,7 @@ exports.getAllBusinesses = async (req, res) => {
           return statusA - statusB;
         }
 
-        if (statusA === 1) {
-          const priceA = getLowestPrice(a) ?? 0;
-          const priceB = getLowestPrice(b) ?? 0;
-
-          return priceA - priceB;
-        }
-
-        return 0;
+        return (getLowestPrice(a) ?? 0) - (getLowestPrice(b) ?? 0);
       });
     } else if (sort === 'rating-high-to-low') {
       businesses.sort((a, b) => getAverageRating(b) - getAverageRating(a));
@@ -519,7 +520,6 @@ exports.getAllBusinesses = async (req, res) => {
         return statusA - statusB;
       });
     }
-
     const totalCount = businesses.length;
     const paginatedBusinesses = businesses.slice(skip, skip + limitNumber);
 
