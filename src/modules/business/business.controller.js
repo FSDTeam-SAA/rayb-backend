@@ -379,9 +379,10 @@ exports.getAllBusinesses = async (req, res) => {
         const items = b.services || [];
 
         return items.some((item) => {
-          const effectivePrice = getEffectivePrice(item);
+          const effectivePrice =
+            item.price !== null && item.price !== undefined ? Number(item.price) : null;
 
-          if (effectivePrice === null) return false;
+          if (effectivePrice === null || Number.isNaN(effectivePrice)) return false;
 
           if (hasMin && hasMax) return effectivePrice >= min && effectivePrice <= max;
           if (hasMin) return effectivePrice >= min;

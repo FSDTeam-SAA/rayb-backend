@@ -3,14 +3,17 @@ const getEffectivePrice = (item) => {
     const val = Number(item.price);
     return Number.isNaN(val) ? null : val;
   }
+
   if (item.minPrice !== null && item.minPrice !== undefined) {
     const val = Number(item.minPrice);
     return Number.isNaN(val) ? null : val;
   }
+
   if (item.maxPrice !== null && item.maxPrice !== undefined) {
     const val = Number(item.maxPrice);
     return Number.isNaN(val) ? null : val;
   }
+
   return null;
 };
 
