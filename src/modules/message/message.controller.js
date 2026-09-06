@@ -5,7 +5,15 @@ const sendMessage = async (req, res, next) => {
     const result = await messageService.sendMessage(req.body, req.files);
 
     const io = req.app.get("io");
-    io.to(result.chat.toString()).emit("newMessage", result);
+    if (io) {
+      if (result.chat) {
+        io.to(result.chat.toString()).emit("newMessage", result);
+      }
+      if (result.receiverId && result.notification) {
+        io.to(result.receiverId.toString()).emit("new_notification", result.notification);
+        io.to(result.receiverId.toString()).emit("notification", result.notification);
+      }
+    }
 
     return res.status(201).json({
       success: true,

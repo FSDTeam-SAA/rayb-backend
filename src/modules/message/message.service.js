@@ -2,53 +2,8 @@ const { sendImageToCloudinary } = require('../../utils/cloudnary');
 const Chat = require('../chat/chat.model');
 const User = require('../user/user.model');
 const Message = require('./message.model');
+const Notification = require('../notification/notification.model');
 const fs = require('fs');
-
-// const sendMessage = async (payload, files) => {
-//   const { chatId, senderId, receiverId, message } = payload;
-
-//   // 1️⃣ Chat exist check
-//   const chat = await Chat.findById(chatId);
-//   if (!chat) {
-//     throw new Error('Chat not found');
-//   }
-
-//   // 2️⃣ Sender validation
-//   const senderValid = chat.participants.some((p) => p.userId.toString() === senderId);
-
-//   // 3️⃣ Receiver validation
-//   const receiverValid = chat.participants.some((p) => p.userId.toString() === receiverId);
-
-//   if (!senderValid || !receiverValid) {
-//     throw new Error('Invalid sender or receiver');
-//   }
-
-//   // 4️⃣ Image upload
-//   let imageUrls = [];
-//   if (files?.length > 0) {
-//     for (const file of files) {
-//       const uploaded = await sendImageToCloudinary(file.path, 'messages');
-//       fs.unlinkSync(file.path);
-//       imageUrls.push(uploaded.secure_url);
-//     }
-//   }
-
-//   // 5️⃣ Create message
-//   const newMsg = await Message.create({
-//     chat: chatId,
-//     senderId,
-//     receiverId,
-//     message,
-//     images: imageUrls,
-//   });
-
-//   // 6️⃣ Update last message
-//   await Chat.findByIdAndUpdate(chatId, {
-//     lastMessage: newMsg._id,
-//   });
-
-//   return newMsg;
-// };
 
 const sendMessage = async (payload, files) => {
   const { chatId, senderId, receiverId, message } = payload;
@@ -93,6 +48,11 @@ const sendMessage = async (payload, files) => {
     lastMessage: newMsg._id,
   });
 
+  const senderUser = await User.findById(senderId);
+  const receiverUser = await User.findById(receiverId);
+  const senderName = senderUser?.name || 'Someone';
+  const receiverType = receiverUser?.userType || 'user';
+
   const existingNotification = await Notification.findOne({
     receiverId,
     type: 'new_message',
@@ -100,19 +60,21 @@ const sendMessage = async (payload, files) => {
     isRead: false,
   });
 
+  let notificationDoc;
   if (existingNotification) {
     existingNotification.senderId = senderId;
-    existingNotification.message = `${senderUser.name} sent you a new message.`;
+    existingNotification.message = `${senderName} sent you a new message.`;
     existingNotification.metadata.messageId = newMsg._id;
-    await existingNotification.save();
+    existingNotification.userType = receiverType;
+    notificationDoc = await existingNotification.save();
   } else {
-    await Notification.create({
+    notificationDoc = await Notification.create({
       senderId,
       receiverId,
-      userType: 'user',
+      userType: receiverType,
       type: 'new_message',
       title: 'New Message',
-      message: `${senderUser.name} sent you a message.`,
+      message: `${senderName} sent you a message.`,
       metadata: {
         chatId,
         messageId: newMsg._id,
@@ -120,7 +82,9 @@ const sendMessage = async (payload, files) => {
     });
   }
 
-  return newMsg;
+  const resultDoc = newMsg.toObject();
+  resultDoc.notification = notificationDoc;
+  return resultDoc;
 };
 
 const getMessages = async (chatId, businessId, currentUserId) => {
