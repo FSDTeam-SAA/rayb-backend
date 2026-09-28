@@ -46,11 +46,13 @@ const createNewAccountInDB = async (payload) => {
     result = await newUser.save();
   }
 
-  await sendEmail({
-    to: result.email,
-    subject: 'Verify your email',
-    html: verificationCodeTemplate(otp),
-  });
+    console.log(`🔑 OTP generated for registration [${result.email}]: ${otp}`);
+
+    await sendEmail({
+      to: result.email,
+      subject: 'Verify your email',
+      html: verificationCodeTemplate(otp),
+    });
 
   const JwtToken = {
     userId: result._id,
@@ -176,11 +178,13 @@ const resendOtpCode = async ({ email }) => {
     { new: true },
   ).select('name email userType');
 
-  await sendEmail({
-    to: existingUser.email,
-    subject: 'Verify your email',
-    html: verificationCodeTemplate(otp),
-  });
+    console.log(`🔑 OTP generated for resend [${existingUser.email}]: ${otp}`);
+
+    await sendEmail({
+      to: existingUser.email,
+      subject: 'Verify your email',
+      html: verificationCodeTemplate(otp),
+    });
   return result;
 };
 

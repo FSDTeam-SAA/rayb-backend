@@ -21,9 +21,21 @@ function initSocket(io) {
 
     // Send message
     socket.on("sendMessage", async (data) => {
-      const { chatId, senderId, receiverId, message, image } = data;
+      let { chatId, senderId, receiverId, message, image } = data;
 
       try {
+        const chatDoc = await Chat.findById(chatId);
+        if (!chatDoc) return;
+
+        if (!receiverId) {
+          const otherParticipant = chatDoc.participants.find(
+            (p) => p.userId && p.userId.toString() !== senderId.toString()
+          );
+          if (otherParticipant) {
+            receiverId = otherParticipant.userId.toString();
+          }
+        }
+
         const newMessage = await Message.create({
           senderId,
           receiverId,
@@ -72,8 +84,10 @@ function initSocket(io) {
         io.to(chatId).emit("newMessage", newMessage);
 
         // Send notification to receiver room
-        io.to(receiverId.toString()).emit("new_notification", notificationDoc);
-        io.to(receiverId.toString()).emit("notification", notificationDoc);
+        if (receiverId) {
+          io.to(receiverId.toString()).emit("new_notification", notificationDoc);
+          io.to(receiverId.toString()).emit("notification", notificationDoc);
+        }
       } catch (err) {
         console.log("sendMessageErr:", err.message);
       }

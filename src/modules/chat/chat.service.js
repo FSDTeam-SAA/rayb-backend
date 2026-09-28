@@ -72,7 +72,7 @@ const getChat = async (userId, businessId = null) => {
   // 2️⃣ Find chats
   const chats = await Chat.find(query)
     .populate('participants.userId', '_id name role imageLink email')
-    .populate('businessId', 'businessInfo')
+    .populate('businessId', 'businessInfo user')
     .populate('lastMessage')
     .sort({ updatedAt: -1 })
     .lean();

@@ -15,6 +15,8 @@ const {
   getHighestPrice,
   getLowestPrice,
   getEffectivePrice,
+  getItemHighestPrice,
+  getItemLowestPrice,
 } = require('../../lib/helper');
 
 exports.createBusiness = async (req, res) => {
@@ -229,9 +231,25 @@ exports.getAllBusinesses = async (req, res) => {
 
     let query = { status: 'approved', $and: [] };
 
+    const safeDecodeAndTrim = (str) => {
+      if (typeof str !== 'string') return str;
+      let decoded = str;
+      try {
+        while (decoded.includes('%')) {
+          const next = decodeURIComponent(decoded);
+          if (next === decoded) break;
+          decoded = next;
+        }
+      } catch (e) {}
+      return decoded.trim();
+    };
+
     const toRegexArray = (value) => {
       const arr = Array.isArray(value) ? value : [value];
-      return arr.map((v) => new RegExp(v.toString().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'));
+      return arr.map((v) => {
+        const cleaned = safeDecodeAndTrim(v.toString());
+        return new RegExp(cleaned.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      });
     };
 
     /* ---------------- SEARCH FILTERS ---------------- */
@@ -243,6 +261,7 @@ exports.getAllBusinesses = async (req, res) => {
           { 'businessInfo.name': regex },
           { 'services.newInstrumentName': regex },
           { 'services.instrumentFamily': regex },
+          { 'services.selectedInstrumentsGroup': regex },
           { 'selectedInstruments.instrumentFamily': regex },
           { 'selectedInstruments.instrumentName': regex },
         ]),
@@ -253,7 +272,8 @@ exports.getAllBusinesses = async (req, res) => {
       const arr = Array.isArray(searchLocation) ? searchLocation : [searchLocation];
 
       const locationConditions = arr.map((loc) => {
-        const escaped = loc.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const cleaned = safeDecodeAndTrim(loc);
+        const escaped = cleaned.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
         const exactPattern = `(?:^|,\\s*)\\s*${escaped}(\\s+\\d{5}(-\\d{4})?)?\\s*(?:,|$)`;
 
@@ -464,7 +484,7 @@ exports.getAllBusinesses = async (req, res) => {
         .map((review) => Number(review.rating))
         .filter((rating) => !Number.isNaN(rating));
 
-      if (!ratings.length) return 0;
+      if (!ratings.length) return null;
 
       return ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length;
     };
@@ -478,24 +498,27 @@ exports.getAllBusinesses = async (req, res) => {
           return statusA - statusB;
         }
 
-        if (statusA === 1) {
-          return (getHighestPrice(b) ?? 0) - (getHighestPrice(a) ?? 0);
+        const highestA = getHighestPrice(a);
+        const highestB = getHighestPrice(b);
+
+        if (highestA !== null && highestB !== null) {
+          if (highestB !== highestA) {
+            return highestB - highestA;
+          }
+          const lowestA = getLowestPrice(a) ?? 0;
+          const lowestB = getLowestPrice(b) ?? 0;
+          return lowestB - lowestA;
         }
 
         return 0;
       });
-    }
 
-    if (sort === 'high-to-low') {
-      businesses.sort((a, b) => {
-        const statusA = getBusinessPricingStatus(a);
-        const statusB = getBusinessPricingStatus(b);
-
-        if (statusA !== statusB) {
-          return statusA - statusB;
+      businesses.forEach((b) => {
+        if (b.services && b.services.length > 1) {
+          b.services.sort(
+            (s1, s2) => (getItemHighestPrice(s2) ?? -1) - (getItemHighestPrice(s1) ?? -1),
+          );
         }
-
-        return (getHighestPrice(b) ?? 0) - (getHighestPrice(a) ?? 0);
       });
     } else if (sort === 'low-to-high') {
       businesses.sort((a, b) => {
@@ -506,12 +529,56 @@ exports.getAllBusinesses = async (req, res) => {
           return statusA - statusB;
         }
 
-        return (getLowestPrice(a) ?? 0) - (getLowestPrice(b) ?? 0);
+        const lowestA = getLowestPrice(a);
+        const lowestB = getLowestPrice(b);
+
+        if (lowestA !== null && lowestB !== null) {
+          if (lowestA !== lowestB) {
+            return lowestA - lowestB;
+          }
+          const highestA = getHighestPrice(a) ?? 0;
+          const highestB = getHighestPrice(b) ?? 0;
+          return highestA - highestB;
+        }
+
+        return 0;
+      });
+
+      businesses.forEach((b) => {
+        if (b.services && b.services.length > 1) {
+          b.services.sort(
+            (s1, s2) => (getItemLowestPrice(s1) ?? Infinity) - (getItemLowestPrice(s2) ?? Infinity),
+          );
+        }
       });
     } else if (sort === 'rating-high-to-low') {
-      businesses.sort((a, b) => getAverageRating(b) - getAverageRating(a));
+      businesses.sort((a, b) => {
+        const ratingA = getAverageRating(a);
+        const ratingB = getAverageRating(b);
+
+        if (ratingA !== null && ratingB === null) return -1;
+        if (ratingA === null && ratingB !== null) return 1;
+
+        if (ratingA !== null && ratingB !== null) {
+          return ratingB - ratingA;
+        }
+
+        return 0;
+      });
     } else if (sort === 'rating-low-to-high') {
-      businesses.sort((a, b) => getAverageRating(a) - getAverageRating(b));
+      businesses.sort((a, b) => {
+        const ratingA = getAverageRating(a);
+        const ratingB = getAverageRating(b);
+
+        if (ratingA !== null && ratingB === null) return -1;
+        if (ratingA === null && ratingB !== null) return 1;
+
+        if (ratingA !== null && ratingB !== null) {
+          return ratingA - ratingB;
+        }
+
+        return 0;
+      });
     } else {
       businesses.sort((a, b) => {
         const statusA = getBusinessPricingStatus(a);

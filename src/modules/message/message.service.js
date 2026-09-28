@@ -103,6 +103,19 @@ const getMessages = async (chatId, businessId, currentUserId) => {
     }
   }
 
+  // Mark unread new_message notifications for this chat and user as read
+  if (currentUserId) {
+    await Notification.updateMany(
+      {
+        receiverId: currentUserId,
+        type: 'new_message',
+        'metadata.chatId': chatId,
+        isRead: false,
+      },
+      { $set: { isRead: true } }
+    );
+  }
+
   // 4️⃣ Fetch messages
   const messages = await Message.find({ chat: chatId }).sort({ createdAt: 1 }).lean();
 
